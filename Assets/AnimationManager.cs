@@ -1,81 +1,80 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class AnimationManager : MonoBehaviour
 {
-    private Animator animator;
-
-    public int currentExerciseIndex = 0;
-    private int loopCount = 0;
-
     [System.Serializable]
     public class ExercisePath
     {
         public string name;
-        public int nextAnimationIndex;
     }
 
-    public ExercisePath[] exerciseSequence;
+    public List<ExercisePath> exerciseSequence = new List<ExercisePath>();
+    private Animator animator;
+    private int currentExerciseIndex = 0;
+    private bool isAnimationStarted = false;
 
     void Start()
     {
         animator = GetComponent<Animator>();
-        loopCount = 0;
 
-        if (exerciseSequence == null || exerciseSequence.Length == 0 || currentExerciseIndex >= exerciseSequence.Length)
+        // Prevent auto-play at start
+        animator.enabled = false;
+
+        if (exerciseSequence == null || exerciseSequence.Count == 0)
         {
-            Debug.LogWarning("[Init] Geen geldige exercise sequence ingesteld.");
-            return;
+            Debug.LogWarning("[Init] No exercises configured!");
         }
-
-        animator.SetInteger("LoopCount", loopCount);
-        animator.SetInteger("NextAnimation", exerciseSequence[0].nextAnimationIndex);
-        Debug.Log($"[Init] Starting with: {exerciseSequence[0].name}");
     }
 
     void Update()
     {
-        if (animator == null || exerciseSequence == null || exerciseSequence.Length == 0 || currentExerciseIndex >= exerciseSequence.Length)
+        if (!isAnimationStarted || animator == null || exerciseSequence.Count == 0)
             return;
 
         AnimatorStateInfo state = animator.GetCurrentAnimatorStateInfo(0);
+        string currentAnim = exerciseSequence[currentExerciseIndex].name;
+        string transitionState = currentAnim + " to idle";
 
-        string currentStateName = exerciseSequence[currentExerciseIndex].name;
-        string transitionStateName = currentStateName + " to idle";
-
-        // Show current state & loop count
-        Debug.Log($"[State] In: {state.fullPathHash}, NormalizedTime: {state.normalizedTime}, LoopCount: {loopCount}");
-
-        // Count loops only while in exercise animation
-        if (state.IsName(currentStateName))
+        if (state.IsName(currentAnim) && state.normalizedTime >= 1f)
         {
-            int detectedLoops = Mathf.FloorToInt(state.normalizedTime);
-            if (detectedLoops > loopCount)
-            {
-                loopCount = detectedLoops;
-                animator.SetInteger("LoopCount", loopCount);
-                Debug.Log($"[Loop Detected] {currentStateName} Loop #{loopCount}");
-            }
+            animator.SetTrigger("Idle");
+            Debug.Log("[Transition] Going to idle after " + currentAnim);
         }
 
-        // When we reach "X to idle", trigger next
-        if (state.IsName(transitionStateName))
+        if (state.IsName(transitionState))
         {
-            Debug.Log($"[Transition] From {currentStateName} to idle.");
-
-            loopCount = 0;
-            animator.SetInteger("LoopCount", loopCount);
-
             currentExerciseIndex++;
-            if (currentExerciseIndex < exerciseSequence.Length)
+            if (currentExerciseIndex < exerciseSequence.Count)
             {
-                var next = exerciseSequence[currentExerciseIndex];
-                animator.SetInteger("NextAnimation", next.nextAnimationIndex);
-                Debug.Log($"[Next] Moving to: {next.name}");
+                animator.Play(exerciseSequence[currentExerciseIndex].name);
+                Debug.Log("[Next] Now playing: " + exerciseSequence[currentExerciseIndex].name);
             }
             else
             {
-                Debug.Log("[Done] All exercises completed.");
+                Debug.Log("[Done] All animations finished.");
+                ResetAnimation();
             }
         }
+    }
+
+    public void StartAnimation()
+    {
+        if (isAnimationStarted || exerciseSequence.Count == 0)
+            return;
+
+        animator.enabled = true;
+        isAnimationStarted = true;
+        currentExerciseIndex = 0;
+        animator.Play(exerciseSequence[currentExerciseIndex].name);
+        Debug.Log("[Start] Animation started: " + exerciseSequence[currentExerciseIndex].name);
+    }
+
+    public void ResetAnimation()
+    {
+        animator.enabled = false;
+        currentExerciseIndex = 0;
+        isAnimationStarted = false;
+        Debug.Log("[Reset] Animation reset.");
     }
 }
